@@ -1,0 +1,94 @@
+#!/usr/bin/perl
+#
+# surface_stats.lava
+#
+# PURPOSE
+#   Report basic statistics (extents, surface area, enclosed volume) for
+#   one or more Vulcan triangulation (.00t) files.
+#
+# INPUTS
+#   - One or more triangulation files (.00t)
+#
+# OUTPUTS
+#   - Surface statistics table printed to STDOUT
+#
+# USAGE
+#   Run from Vulcan: Utilities -> Run Lava Script -> surface_stats.lava
+#   Or from CLI:     perl surface_stats.lava  (uses PROJECT_DIR and TRI_PATTERN)
+#
+# AUTHOR
+#   Brent Buffham
+#
+# ----------------------------------------------------------------------------
+
+use strict;
+use warnings;
+use lib '../../..';
+use Vulcan::Triangulation;
+use Vulcan::Utils qw(find_files);
+
+# ---------------------------------------------------------------------------
+# Parameters
+# ---------------------------------------------------------------------------
+
+my $PROJECT_DIR = $ENV{VULCAN_PROJECT} // '.';
+my $TRI_PATTERN = $ENV{TRI_PATTERN}    // '*.00t';
+
+# ---------------------------------------------------------------------------
+# Find triangulation files
+# ---------------------------------------------------------------------------
+
+my @files = find_files( $PROJECT_DIR, $TRI_PATTERN );
+
+unless (@files) {
+    warn "No triangulation files found matching '$TRI_PATTERN' "
+       . "in '$PROJECT_DIR'\n";
+    exit 0;
+}
+
+printf "Found %d triangulation file(s)\n\n", scalar @files;
+
+# ---------------------------------------------------------------------------
+# Report stats for each file
+# ---------------------------------------------------------------------------
+
+printf "%-40s  %8s  %8s  %14s  %14s\n",
+    'File', 'Vertices', 'Triangles', 'Area (m2)', 'Volume (m3)';
+printf "%s\n", '-' x 90;
+
+for my $file ( sort @files ) {
+    my $tri = Vulcan::Triangulation->new(
+        project_dir => $PROJECT_DIR,
+        verbose     => 0,
+    );
+
+    unless ( $tri->open_triangulation($file) ) {
+        warn "Skipping '$file': " . $tri->error . "\n";
+        next;
+    }
+
+    my $area   = $tri->calculate_area();
+    my $volume = $tri->calculate_volume();
+    my $ext    = $tri->extents();
+
+    my $basename = $file;
+    $basename =~ s{.*/}{};
+
+    printf "%-40s  %8d  %8d  %14.2f  %14.2f\n",
+        $basename,
+        $tri->vertex_count(),
+        $tri->triangle_count(),
+        $area,
+        $volume;
+
+    if ( $ext && $ENV{VERBOSE} ) {
+        printf "  Extents: X=[%.2f, %.2f]  Y=[%.2f, %.2f]  Z=[%.2f, %.2f]\n",
+            $ext->{xmin}, $ext->{xmax},
+            $ext->{ymin}, $ext->{ymax},
+            $ext->{zmin}, $ext->{zmax};
+    }
+
+    $tri->close_triangulation();
+}
+
+printf "%s\n", '-' x 90;

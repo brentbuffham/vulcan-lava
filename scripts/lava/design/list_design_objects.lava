@@ -1,0 +1,98 @@
+#!/usr/bin/perl
+#
+# list_design_objects.lava
+#
+# PURPOSE
+#   List all layers and objects in a Vulcan design database.
+#   Optionally filter by layer name pattern.
+#
+# INPUTS
+#   - Design file (.dgd.isis)
+#   - Optional layer filter (glob pattern, e.g. "PIT_*")
+#
+# OUTPUTS
+#   - Layer and object summary printed to STDOUT
+#
+# USAGE
+#   Run from Vulcan: Utilities -> Run Lava Script -> list_design_objects.lava
+#   Or from CLI:     perl list_design_objects.lava
+#
+# AUTHOR
+#   Brent Buffham
+#
+# ----------------------------------------------------------------------------
+
+use strict;
+use warnings;
+use lib '../../..';
+use Vulcan::Design;
+
+# ---------------------------------------------------------------------------
+# Parameters
+# ---------------------------------------------------------------------------
+
+my $PROJECT_DIR  = $ENV{VULCAN_PROJECT}  // '.';
+my $DESIGN_FILE  = $ENV{DESIGN_FILE}     // 'design.dgd.isis';
+my $LAYER_FILTER = $ENV{LAYER_FILTER}    // '*';    # glob-style filter
+
+# ---------------------------------------------------------------------------
+# Open design
+# ---------------------------------------------------------------------------
+
+my $dgd = Vulcan::Design->new(
+    project_dir => $PROJECT_DIR,
+    verbose     => 1,
+);
+
+$dgd->open_project()
+    or die "Cannot open project: " . $dgd->error . "\n";
+
+$dgd->open_design($DESIGN_FILE)
+    or die "Cannot open design '$DESIGN_FILE': " . $dgd->error . "\n";
+
+printf "Design file : %s\n\n", $dgd->design_file();
+
+# ---------------------------------------------------------------------------
+# Build filter regex from glob pattern
+# ---------------------------------------------------------------------------
+
+my $filter_re = $LAYER_FILTER;
+$filter_re =~ s/\./\\./g;
+$filter_re =~ s/\*/.*?/g;
+$filter_re =~ s/\?/./g;
+$filter_re = qr/^$filter_re$/i;
+
+# ---------------------------------------------------------------------------
+# List layers and objects
+# ---------------------------------------------------------------------------
+
+my @layers = $dgd->layer_names();
+printf "Total layers: %d\n\n", scalar @layers;
+
+printf "%-30s  %8s\n", 'Layer', 'Objects';
+printf "%s\n", '-' x 42;
+
+my $grand_total = 0;
+for my $layer ( sort @layers ) {
+    next unless $layer =~ $filter_re;
+
+    my $count = $dgd->object_count($layer);
+    $grand_total += $count;
+    printf "%-30s  %8d\n", $layer, $count;
+
+    # Detail listing when verbosity requested
+    if ( $ENV{VERBOSE} ) {
+        my $objects = $dgd->get_objects( layer => $layer );
+        for my $obj (@$objects) {
+            printf "    %-26s  %-10s  %d pts\n",
+                $obj->{name}, $obj->{type},
+                scalar @{ $obj->{points} };
+        }
+    }
+}
+
+printf "%s\n", '-' x 42;
+printf "%-30s  %8d\n", 'TOTAL', $grand_total;
+
+$dgd->close_design();
+$dgd->close_project();
