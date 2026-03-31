@@ -1,0 +1,199 @@
+#!/usr/bin/perl
+use Lava;
+use Macro;
+use vulcan;
+use List::MoreUtils 'uniq';
+use POSIX qw(strftime);
+#Show Details of Script
+#Lava::Report("Displaying information about Script...");
+Lava::Report("#################################################################################");
+Lava::Report("#      Title           : BRENTBUFFHAM_FileToSurpac                              #");
+Lava::Report("#      Version         : 1.0                                                    #");
+Lava::Report("#      Author          : Brent Buffham                                          #");
+Lava::Report("#      Email           : brent.buffham\@gmail.com                                #");
+Lava::Report("#                                                                               #");
+Lava::Report("#      Description     : Creates STR file for Surpac                            #");
+Lava::Report("#                                                                               #");
+Lava::Report("#      Primary Use(s)  : Creating Blast Masters as a STR file                   #");
+Lava::Report("#      Version 01 Date : 26 JAN 2023                                            #");
+Lava::Report("#################################################################################");
+
+#Declare Variables
+my @xArray;
+my @yArray;
+my @zArray;
+my $xLast;
+my $yLast;
+my $zLast;
+my $polyID;
+my $targetRL = 0;
+my $segmentNumber;
+
+my $fileHandler;
+my $doLevel = 0;
+my $doClose = 1;
+my $toPoints = 0;
+my $toHoles = 0;
+my $layerName;
+my $objectName;
+my $fileName = "blastmaster";
+my $filepath = "C:\\Temp\\";
+
+my %userSettings;
+my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime();
+
+
+my $datestring = strftime "%d-%b-%y", localtime;
+
+my $loop = 1;
+&loadDefaults;
+
+while ($loop == 1){
+
+	#Lava::Report("in while Loop...");
+
+	my $panel = new Lava::Panel;
+	
+	my $panelTitle1 = "File Setup.";
+	my $panelTitle2 = "Set the String/Segment value.";
+
+	$panel->text("Enter the Path Location to save the file.");
+	$panel->item("Path : ", \$filepath, 300);
+	$panel->text("                        Note : The Path MUST include a \\ (slash) at the end.");
+	$panel->text("Enter the file name.");
+	$panel->item("Name : ", \$fileName, 300);
+	$panel->text("                        Note : Do not include the file type suffix.");
+	$panel->text(" ");
+	#$panel->logical_button("Level the Poly to Target RL (use z point level)",\$doLevel);
+	#$panel->text("            Note : This will force the polys to the Entered RL.");
+	$panel->logical_button("Condition 1 - Force Close all polygons",\$doClose);
+	$panel->text("            Note : This will force the polys to be closed.");
+	$panel->logical_button("Condition 2 - Force polys to points ONLY",\$toPoints);
+	$panel->text("            Note : This will override condition 1");
+	$panel->text(" ");
+	# $panel->text("Enter a Target RL");
+	# $panel->numeric("Target RL       :",\$targetRL,10,2);
+	# $panel->text(" ");
+
+	if($panel->execute("$panelTitle1")){
+		#Open a file Handler to to start writing a CSV
+		my $nameLength = $filepath.length;
+		
+		if(substr($filepath,($nameLength-1),($filepath.length)) != "\\"){$filepath = "$filepath\\";}
+		else{$filepath;}
+		open (my $fileHandler, ">$filepath$fileName.str");
+		$polyID = 1;
+
+		print $fileHandler ("$fileName,"); 
+		print $fileHandler ("$datestring,0.000,0.000\n");
+		print $fileHandler ("0, 0.000, 0.000, 0.000,\n");
+
+		#Select the Polygons	
+		for(my $polygon = new Lava::Selection("Select the Object to STR","multi,shadow"); $polygon->has_more; $polygon->next)
+		{
+			#Check the Poly is a Poly
+			if($polygon->is_poly){
+
+				$panel = new Lava::Panel;
+				$panel->text("Enter a Segment number");
+				$panel->numeric("Segment or Sting Number    :",\$segmentNumber,10,0);
+				$panel->text(" ");
+				$panel->text("Karara Common Codes:");
+				$panel->text("Blast:511, Ramp:1, CrestLine:2 ToeLine:3");
+				$panel->text("WS:911, PAF:912, MGB:931, MGO:942, MGG:943, MGP:944, MGY:945");
+
+				if($panel->execute("$panelTitle2")){
+					my $objectName = $polygon->name;
+					my $objectDesc = $polygon->description;
+					my $points = $polygon->coordinates->n;
+
+						for(my $i = 0; $i <$points; $i++){
+						my ($x,$y,$z,$con,$name) = $polygon->coordinates->i($i);
+						$xArray[$i] = sprintf("%.3f",$x);
+						$yArray[$i] = sprintf("%.3f",$y);
+						$zArray[$i] = sprintf("%.3f",$z);
+						#if ($doLevel = 1){
+						#	$targetRL = $zArray[0];
+						#}
+						$segmentNumber = sprintf("%.0f",$segmentNumber);
+						my @printArray;
+						$printArray[$i] = "$segmentNumber,$yArray[$i],$xArray[$i],$zArray[$i],$objectName,$objectDesc";
+						if($i<1){
+							Lava::Report("File consist of String Id, Y, X, Z, ObjectName, Other...");
+							Lava::Report("String Id, Y, X, Z, D1, D2");
+						}
+						Lava::Report("$printArray[$i]");
+						print $fileHandler ("$printArray[$i]\n");
+					
+						#Add the first point to close the polygon
+						if ($doClose == 1 && $toPoints != 1){
+							if ($i==$points-1){
+								$xLast = sprintf("%.3f",$xArray[0]);
+								$yLast = sprintf("%.3f",$yArray[0]);
+								$zLast = sprintf("%.3f",$zArray[0]);
+								$xLast = sprintf("%.3f",$xLast);
+								$yLast = sprintf("%.3f",$yLast);
+								$zLast = sprintf("%.3f",$zLast);
+								Lava::Report("$segmentNumber,$yLast,$xLast,$zArray[$i],$objectName,$objectDesc\n");
+								push(@printArray, "$segmentNumber,$yLast,$xLast,$zArray[$i],$objectName,$objectDesc\n0, 0.000, 0.000, 0.000,\n");
+								print $fileHandler ($printArray[$i+1]);
+							}
+						}
+						elsif($doClosed == 0 && $toPoints == 1) {
+							if ($i==$points-1){
+								push(@printArray, "0, 0.000, 0.000, 0.000,\n");
+								print $fileHandler ($printArray[$i+1]);
+							}
+						}
+						
+						}
+					
+					$polyID++;
+				}
+
+			}
+
+		}
+		print $fileHandler ("0, 0.000, 0.000, 0.000, END\n");
+		close $fileHandler;
+		Lava::Message("File Written to : $filepath$fileName.str");
+	}
+	&saveDefaults;
+	$loop = 0;	
+
+}
+#Lava::Report("Finished Script Run...");
+
+###########################################
+# Default Subroutines
+############################################
+
+sub loadDefaults
+{
+	# Load defaults into a hash
+	dbmopen %userSettings,"strFileDefaults",0666;
+	#Set the values to the default values
+	$filepath	    = $userSettings{'filepath'} || "C:\\Temp\\";
+	$fileName	    = $userSettings{'fileName'} || "tempFile";
+	$targetRL       = $userSettings{'targetRL'} || "500";
+	$toPoints       = $userSettings{'toPoints'} || "0";
+	$doLevel        = $userSettings{'doLevel'}  || "0";
+	$doClosed       = $userSettings{'doClose'}  || "1";
+	$segmentNumber  = $userSettings{'segmentNumber'} || "segmentNumber";
+	dbmclose %userSettings;
+}
+
+sub saveDefaults
+{
+	# Save defaults into a hash
+	dbmopen %userSettings,"strFileDefaults",0666;
+	# Save the default values to the below
+	$userSettings{'filepath'} 	=$filepath;
+	$userSettings{'fileName'} 	=$fileName;
+	$userSettings{'targetRL'}   =$targetRL ;
+	$userSettings{'toPoints'}   =$toPoints ;
+	$userSettings{'doLevel'}    =$doLevel;
+	$userSettings{'doClose'}    =$doClosed ;
+	$userSettings{'segmentNumber'} 	=$segmentNumber;
+	dbmclose %userSettings;
+}

@@ -1,0 +1,171 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Lava;
+use Macro;
+use vulcan;
+use Triangulation;
+use POSIX qw(strftime);
+
+Lava::Report("#################################################################################");
+Lava::Report("#      Title           : BRENTBUFFHAM_FileToASCII-NAV-v2                        #");
+Lava::Report("#      Version         : 2.2                                                    #");
+Lava::Report("#      Description     : Creates NAV ASCII file for Wenco Lite (with debug)     #");
+Lava::Report("#      Date            : 24-07-2025                                             #");
+Lava::Report("#      Author          : brent.buffham\@gmail.com                                #");
+Lava::Report("#################################################################################");
+
+# Default paths and layer names
+my $filepath       = "C:\\Temp\\";
+my $fileName       = "wencolite-nav";
+my $displayLayer   = "DISPLAY";
+my $surfLayer      = "SURF";
+# Font multiplier: scale text size to NAV readability
+my $fontMultiplier = 10;
+
+sub loadDefaults {
+    dbmopen(my %s, "strFileDefaults", 0666);
+    $filepath     = $s{'filepath'}      || $filepath;
+    $fileName     = $s{'fileName'}      || $fileName;
+    $displayLayer = $s{'displayLayer'}  || $displayLayer;
+    $surfLayer    = $s{'surfLayer'}     || $surfLayer;
+    dbmclose(%s);
+}
+
+sub saveDefaults {
+    dbmopen(my %s, "strFileDefaults", 0666);
+    $s{'filepath'}     = $filepath;
+    $s{'fileName'}     = $fileName;
+    $s{'displayLayer'} = $displayLayer;
+    $s{'surfLayer'}    = $surfLayer;
+    dbmclose(%s);
+}
+
+&loadDefaults;
+my $loop = 1;
+
+while ($loop) {
+    my $panel = Lava::Panel->new;
+    $panel->text("Enter path to save the .nav file");
+    $panel->item("Path          : ", \$filepath,      300);
+    $panel->text("Enter the file name (without extension)");
+    $panel->item("Name          : ", \$fileName,      300);
+    $panel->text("Enter Layer Name for TEXT/LINE/POINT (Max 15)");
+    $panel->item("Display Layer : ", \$displayLayer,   15);
+    $panel->text("Enter Layer Name for Triangles (Max 15)");
+    $panel->item("Surface Layer : ", \$surfLayer,      15);
+
+    if ($panel->execute("Export Options")) {
+        $filepath .= "\\" unless $filepath =~ /\\$/;
+        open my $fh, '>', "$filepath$fileName.nav"
+            or die "Cannot open NAV file '$filepath$fileName.nav': $!";
+
+        print $fh "HEADER VERSION,1\n";
+
+        # TEXT / POLYLINE / POINT
+        for (
+            my $ent = Lava::Selection->new("Select Text & Poly Entities", "multi,shadow");
+            $ent->has_more;
+            $ent->next
+        ) {
+            my $col = $ent->colour;
+            my $nm  = $displayLayer;
+
+            # TEXT
+            if ($ent->is_text) {
+                my $txt      = $ent->text;
+                my $size     = $txt->size;
+                my $fontsize = $size * $fontMultiplier;  # effective font size
+
+                my @parts;
+                for my $r (0 .. $txt->n - 1) {
+                    (my $c = $txt->i($r)) =~ s/\s+/_/g;
+                    push @parts, $c;
+                }
+                my $value = join("_", @parts);
+                my ($x,$y,$z) = $ent->coordinates->i(0);
+                printf $fh
+                    "TEXT,%d,%s,%.6f,%s,0.000000 %.6f,%.6f,%.6f\n",
+                    $col, $nm, $fontsize, $value, $x, $y, $z;
+                next;
+            }
+
+            # POLYLINE / POINT
+            if ($ent->is_poly) {
+                my $n   = $ent->coordinates->n;
+                my @pts;
+                Lava::Report("--- New Polyline Entity: total vertices = $n");
+                for my $i (0 .. $n-1) {
+                    my ($x,$y,$z,$w,$t) = $ent->coordinates->i($i);
+                    my $coord = sprintf("%.6f,%.6f,%.6f", $x, $y, $z);
+                    push @pts, $coord if $t;
+                    if ($t == 0) {
+                        Lava::Report("Flush at idx $i: pts=[" . join(' ',@pts) . "]");
+                        if (@pts == 1) {
+                            printf $fh
+                                "POINT,%d,%s,,0.000000,0.000000 %s 0.000000,0.000000,0.000000\n",
+                                $col, $nm, $pts[0];
+                        } elsif (@pts > 1) {
+                            my $closed = $ent->closed;
+                            Lava::Report("Entity->closed = " . ($closed?'YES':'NO'));
+                            if ($closed) {
+                                push @pts, $pts[0];
+                                Lava::Report("Appended closing pt: $pts[0]");
+                            }
+                            printf $fh "LINE,%d,%s %s\n",
+                                $col, $nm, join(" ",@pts);
+                        }
+                        @pts = ($coord);
+                    }
+                }
+                # Final flush
+                Lava::Report("Final flush pts=[" . join(' ',@pts) . "]");
+                if (@pts == 1) {
+                    printf $fh
+                        "POINT,%d,%s,,0.000000,0.000000 %s 0.000000,0.000000,0.000000\n",
+                        $col, $nm, $pts[0];
+                } elsif (@pts > 1) {
+                    my $closed = $ent->closed;
+                    Lava::Report("Final entity->closed = " . ($closed?'YES':'NO'));
+                    if ($closed) {
+                        push @pts, $pts[0];
+                        Lava::Report("Appended final closing pt: $pts[0]");
+                    }
+                    printf $fh "LINE,%d,%s %s\n",
+                        $col, $nm, join(" ",@pts);
+                }
+                next;
+            }
+        }
+
+        # TRIANGULATION
+        my $tsel = Lava::TriSelection->new("Select a Triangulation to Export");
+        if ($tsel->is_valid) {
+            my $tri = $tsel->triangulation;
+            if ($tri->is_valid) {
+                for my $i (0 .. $tri->triangles-1) {
+                    my ($v1,$v2,$v3) = $tri->triangle($i);
+                    my ($x1,$y1,$z1) = $tri->point($v1);
+                    my ($x2,$y2,$z2) = $tri->point($v2);
+                    my ($x3,$y3,$z3) = $tri->point($v3);
+                    printf $fh
+                        "TRIANGLE,%d,%s %.6f,%.6f,%.6f %.6f,%.6f,%.6f %.6f,%.6f,%.6f\n",
+                        9, $surfLayer,
+                        $x1,$y1,$z1,
+                        $x2,$y2,$z2,
+                        $x3,$y3,$z3;
+                }
+            } else {
+                Lava::Report("Selected triangulation failed to load.");
+            }
+        } else {
+            Lava::Report("No triangulation selected—skipping triangles.");
+        }
+
+        close $fh;
+        Lava::Message("NAV file written to: $filepath$fileName.nav");
+    }
+
+    &saveDefaults;
+    $loop = 0;
+}

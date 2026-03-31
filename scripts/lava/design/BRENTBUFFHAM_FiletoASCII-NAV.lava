@@ -1,0 +1,114 @@
+#!/usr/bin/perl
+use Lava;
+use Macro;
+use vulcan;
+use POSIX qw(strftime);
+
+Lava::Report("#################################################################################");
+Lava::Report("#      Title           : BRENTBUFFHAM_FileToASCII-NAV                           #");
+Lava::Report("#      Version         : 3.2                                                    #");
+Lava::Report("#      Description     : Creates NAV ASCII file for Wenco Lite                  #");
+Lava::Report("#################################################################################");
+
+my $filepath  = "C:\\Temp\\";
+my $fileName  = "wnecolite-nav";
+
+sub loadDefaults {
+    dbmopen(my %userSettings, "strFileDefaults", 0666);
+    $filepath  = $userSettings{'filepath'}  || "C:\\Temp\\";
+    $fileName  = $userSettings{'fileName'}  || "wnecolite-nav";
+    dbmclose(%userSettings);
+}
+
+sub saveDefaults {
+    dbmopen(my %userSettings, "strFileDefaults", 0666);
+    $userSettings{'filepath'} = $filepath;
+    $userSettings{'fileName'} = $fileName;
+    dbmclose(%userSettings);
+}
+
+&loadDefaults;
+
+my $loop = 1;
+while ($loop == 1) {
+    my $panel = new Lava::Panel;
+	my $layerName = "DEFAULT";
+    $panel->text("Enter path to save the .nav file");
+    $panel->item("Path : ", \$filepath, 300);
+    $panel->text("Enter the file name (without extension)");
+    $panel->item("Name : ", \$fileName, 300);
+	$panel->text("Enter Layer Name (Max 15 characters)");
+	$panel->item("Layer : ", \$layerName, 15);
+
+    if ($panel->execute("Export Options")) {
+        $filepath .= "\\" unless $filepath =~ /\\$/;
+        open(my $fileHandler, ">$filepath$fileName.nav") or die "Cannot open NAV file";
+
+        # Write header
+        print $fileHandler "HEADER VERSION,1\n";
+
+        # Loop over selected Vulcan entities
+        for (my $entity = new Lava::Selection("Select Vulcan Objects", "multi,shadow"); $entity->has_more; $entity->next) {
+            my $colour = $entity->colour;
+            my $name   = $layerName;
+			
+
+
+            # TEXT ENTITY
+			if ($entity->is_text) {
+				my $text_obj = $entity->text;
+				my $text_value = "";
+				for (my $row = 0; $row < $text_obj->n; $row++) {
+					(my $clean = $text_obj->i($row)) =~ s/\s+/_/g;
+					$text_value .= $clean;
+					$text_value .= "_" if $row < $text_obj->n - 1;
+				}
+			
+				my ($x, $y, $z) = $entity->coordinates->i(0);
+				printf $fileHandler "TEXT,%d,%s,1.000000,%s,0.000000 %.6f,%.6f,%.6f\n",
+					$entity->colour, $layerName, $text_value, $x, $y, $z;
+				next;
+			}
+
+            # POLYLINE / POINT ENTITY
+            next unless $entity->is_poly;
+            my $n = $entity->coordinates->n;
+            my @line_points = ();
+
+            for (my $i = 0; $i < $n; $i++) {
+                my ($x, $y, $z, $w, $t, $nlabel) = $entity->coordinates->i($i);
+                my $xyz = sprintf("%.6f,%.6f,%.6f", $x, $y, $z);
+
+                if ($t == 0) {
+                    # flush previous segment
+                    if (@line_points == 1) {
+                        print $fileHandler "POINT,$colour,$name,,0.000000,0.000000 $line_points[0] 0.000000,0.000000,0.000000\n";
+                    } elsif (@line_points > 1) {
+						my $obj = new Lava::Obj($entity);
+						if ($obj->closed) {
+							push @line_points, $line_points[0];
+						}
+						print $fileHandler "LINE,$colour,$name, " . join(" ", @line_points) . "\n";
+					}
+
+                    @line_points = ($xyz);  # start new segment
+                } else {
+                    push @line_points, $xyz;
+                }
+            }
+
+            # flush final segment
+            if (@line_points == 1) {
+                print $fileHandler "POINT,$colour,$name,,0.000000,0.000000 $line_points[0] 0.000000,0.000000,0.000000\n";
+            } elsif (@line_points > 1) {
+                print $fileHandler "LINE,$colour,$name, " . join(" ", @line_points) . "\n";
+            }
+        }
+
+        close $fileHandler;
+        Lava::Message("NAV file written to: $filepath$fileName.nav");
+    }
+
+    &saveDefaults;
+    $loop = 0;
+}

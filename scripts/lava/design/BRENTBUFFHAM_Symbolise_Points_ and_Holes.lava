@@ -1,0 +1,729 @@
+#!/usr/bin/perl
+use Math::Trig qw(pi asin acos atan);
+
+use Lava;
+use Macro;
+use vulcan;
+use strict;
+use warnings;
+#################################################################################
+#
+#      Title           : BRENTBUFFHAM_Symbolise_Points_ and_Holes.lava
+#      Version         : 3.0
+#      Author          : Brent Buffham
+#
+#      Description     : Places a marker around a blast hole.
+#                      : 6 Types Available - 
+#							: Circle, Cross, Triangle, Square, Star, Comms
+#
+#      Primary Use(s)  : Creating hole markers on a reconcillation tie up
+#                      : map, denoting first point in sequences.
+#
+#      Version 01 Date : 18 - MARCH - 2016
+#      Version 01 Date : 30 - MARCH - 2016 - Added hole colour
+#	   Version 02 Date : 02 - AUGUST - 2017 - Added star shape as #5
+#      Version 03 Date : 29 - NOVEMBER - 2017 - Added Comms Wifi shape as #6
+#
+################################################################################
+#arrays
+my @xS;
+my @yS;
+my @zS;
+my @draw;
+
+my $colour;
+my $objectName;
+my $layerName;
+my $layer;
+my $scale  = 1;
+my $marker = 3;
+my $loop   = 1;
+
+my $doColour = 0;
+my $doMark = 1;
+
+my $poly;
+my %userSettings;
+
+
+
+&loadDefaults;
+
+while ( $loop == 1 )
+{
+	my $panel  = new Lava::Panel;
+	#$panel->logical_button("Change hole colour.",\$doColour);
+	#$panel->logical_button("Add Hole marker.",\$doMark);
+
+	$panel->text("*******************************************************************************");
+	$panel->text("                                     MARKER TYPES");
+	$panel->text("   1 = Circle   |   2 = Cross |  3 = Triangle |  4 = Square  |  5 = Star  | 6 = COMMS");
+	$panel->text("*******************************************************************************");	
+	$panel->colour("Pick a Colour for the marker or Hole      ", \$colour );
+	$panel->numeric("Select the type of Marker                 ", \$marker, 1, 0 );
+	$panel->numeric("Default size is approx. 1 meter - Scale : ", \$scale, 6, 2 );
+
+	if ( $panel->execute("User Inputs Panel") )
+	{
+		
+
+		for ( my $object = new Lava::Selection( "Select object to Mark.", "multi,shadow" ) ; $object->has_more ; $object->next )
+		{
+		my $i          = 0;
+		my $markerName = "";
+			if ( $object->is_poly)
+			{
+
+
+				$layerName = $object->layer; #get the selected objects layer Name and store
+				$objectName = $object->name; #get the selected objects Name and store
+				Lava::Report("Objects Selected");
+				my ( $x, $y, $z, $w, $con, $name ) = $object->coordinates->i;
+				$xS[$i] = $x;
+				$yS[$i] = $y;
+				$zS[$i] = $z;
+				my $tempY = sprintf( "%.3f", $xS[$i] );
+				my $tempX = sprintf( "%.3f", $yS[$i] );
+				my $tempZ = sprintf( "%.3f", $zS[$i] );
+
+#				if($doColour == 1)
+#				{
+#					$object->colour($colour);
+#					$object->replace();
+#					
+#				}
+
+				
+##				if($doMark == 1)
+##				{
+					$poly = new Lava::Obj();
+					if ( $marker == 1 )
+					{
+						$markerName = "Circle";
+						&circle( $xS[$i], $yS[$i], $scale );
+						for(my $pID = 0; $pID < scalar(@xS); $pID++ )
+						{
+							my $cnt = $pID + 1 ;
+							$poly->coordinates->i($pID, $xS[$pID], $yS[$pID], $z, "w-Value", 1,($pID+1));
+							$poly->colour($colour);
+							$poly->closed(1);
+							$poly->name("CIRCLE");
+						}
+					}
+					elsif ( $marker == 2 )
+					{
+						$markerName = "Cross";
+
+						my ( $refX, $refY, $draw ) = &cross( $xS[$i], $yS[$i], $scale );
+
+						@draw = @$draw;
+
+						for(my $pID = 0; $pID < scalar(@xS); $pID++ )
+						{
+							my $cnt = $pID + 1 ;
+							$poly->coordinates->i($pID, $xS[$pID], $yS[$pID], $z, "w-Value", $draw[$pID],($pID+1));
+							$poly->colour($colour);
+							$poly->name("CROSS");
+						}
+					}
+					elsif ( $marker == 3 )
+					{
+						$markerName = "Triangle";
+						&triangle( $xS[$i], $yS[$i], $scale );
+
+						for(my $pID = 0; $pID < scalar(@xS); $pID++ )
+						{
+							my $cnt = $pID + 1 ;
+							$poly->coordinates->i($pID, $xS[$pID], $yS[$pID], $z, "w-Value", 1,($pID+1));
+							$poly->colour($colour);
+							$poly->closed(1);
+							$poly->name("TRIANGLE");
+						}
+					}
+					elsif ( $marker == 4 )
+					{
+						$markerName = "Square";
+						&square( $xS[$i], $yS[$i], $scale );
+
+						for(my $pID = 0; $pID < scalar(@xS); $pID++ )
+						{
+							my $cnt = $pID + 1 ;
+							$poly->coordinates->i($pID, $xS[$pID], $yS[$pID], $z, "w-Value", 1,($pID+1));
+							$poly->colour($colour);
+							$poly->closed(1);
+							$poly->name("SQUARE");
+						}
+
+					}
+					elsif ( $marker == 5 )
+					{
+						$markerName = "Star";
+						&star( $xS[$i], $yS[$i], $scale );
+
+						for(my $pID = 0; $pID < scalar(@xS); $pID++ )
+						{
+							my $cnt = $pID + 1 ;
+							$poly->coordinates->i($pID, $xS[$pID], $yS[$pID], $z, "w-Value", 1,($pID+1));
+							$poly->colour($colour);
+							$poly->closed(1);
+							$poly->name("STAR");
+						}
+
+					}
+					elsif ( $marker == 6 )
+					{
+						$markerName = "Wifi";
+
+						my ( $refX, $refY, $draw ) = &wifi( $xS[$i], $yS[$i], $scale );
+
+						@draw = @$draw;
+
+						for(my $pID = 0; $pID < scalar(@xS); $pID++ )
+						{
+							my $cnt = $pID + 1 ;
+							$poly->coordinates->i($pID, $xS[$pID], $yS[$pID], $z, "w-Value", $draw[$pID],($pID+1));
+							$poly->colour($colour);
+							$poly->name("WIFI");
+						}
+					}
+					else
+					{
+						Lava::Message("Not Supported Symbol.\nTerminating Script");
+						die;
+					}
+#				} $doMark
+				$layer = new Lava::Layer($object->layer);
+				$layer->edited(1);
+
+				$layer->add($poly);
+
+				Lava::Report("Object[$objectName], x[$tempX], y[$tempY], z[$tempZ], Marker[$markerName]");
+			}
+			$i++;
+		}
+
+
+		&saveDefaults;
+	}
+	else
+	{
+		&saveDefaults;
+		$loop = 0;
+	}
+}
+
+sub refresh
+{
+	RunMenu("DESIGN_UNDO","abort",
+      "FINISH") || die "Macro mismatch.\n";
+   RunMenu("DESIGN_REDO","abort",
+      "FINISH") || die "Macro mismatch.\n";
+}
+
+sub cross
+{
+	my ( $refX1, $refY1 ) = @_;
+	my @pen;
+	&clearArrays;
+	$xS[0]  = (0.707 * $scale ) + $refX1;
+	$xS[1]  = ( -0.707 * $scale ) + $refX1;
+	$xS[2]  = ( -0.707 * $scale ) + $refX1;
+	$xS[3]  = ( 0.707 * $scale ) + $refX1;
+	$yS[0]  = ( 0.707 * $scale ) + $refY1;
+	$yS[1]  = (-0.707 * $scale ) + $refY1;
+	$yS[2]  = ( 0.707 * $scale ) + $refY1;
+	$yS[3]  = (-0.707 * $scale ) + $refY1;
+	$pen[0] = 1;
+	$pen[1] = 1;
+	$pen[2] = 0;
+	$pen[3] = 1;
+	return ( \@xS, \@yS, \@pen );
+}
+
+sub wifi
+{
+	my ( $refX1, $refY1 ) = @_;
+	my @pen;
+	&clearArrays;
+	$xS[0]   = (-2.50 * 1 ) + $refX1;
+	$xS[1]   = (-3.50 * 1 ) + $refX1;
+	$xS[2]   = (-3.50 * 1 ) + $refX1;
+	$xS[3]   = (-2.50 * 1 ) + $refX1;
+	$xS[4]   = (-2.50 * 1 ) + $refX1;
+	$xS[5]   = ( 2.50 * 1 ) + $refX1;
+	$xS[6]   = ( 3.50 * 1 ) + $refX1;
+	$xS[7]   = ( 3.50 * 1 ) + $refX1;
+	$xS[8]   = ( 2.50 * 1 ) + $refX1;
+	$xS[9]   = ( 2.50 * 1 ) + $refX1;
+	$xS[10]  = ( 0.00 * 1 ) + $refX1;
+	$xS[11]  = ( 0.00 * 1 ) + $refX1;
+	$xS[12]  = ( 0.00 * 1 ) + $refX1;
+	$xS[13]  = ( 0.50 * 1 ) + $refX1;
+	$xS[14]  = ( 1.00 * 1 ) + $refX1;
+	$xS[15]  = ( 2.00 * 1 ) + $refX1;
+	$xS[16]  = ( 3.30 * 1 ) + $refX1;
+	$xS[17]  = ( 4.50 * 1 ) + $refX1;
+	$xS[18]  = ( 5.50 * 1 ) + $refX1;
+	$xS[19]  = ( 6.00 * 1 ) + $refX1;
+	$xS[20]  = ( 6.00 * 1 ) + $refX1;
+	$xS[21]  = ( 6.50 * 1 ) + $refX1;
+	$xS[22]  = ( 5.50 * 1 ) + $refX1;
+	$xS[23]  = ( 6.00 * 1 ) + $refX1;
+	$xS[24]  = (-2.00 * 1 ) + $refX1;
+	$xS[25]  = (-2.06 * 1 ) + $refX1;
+	$xS[26]  = (-2.17 * 1 ) + $refX1;
+	$xS[27]  = (-2.29 * 1 ) + $refX1;
+	$xS[28]  = (-2.51 * 1 ) + $refX1;
+	$xS[29]  = (-2.63 * 1 ) + $refX1;
+	$xS[30]  = (-2.74 * 1 ) + $refX1;
+	$xS[31]  = (-2.80 * 1 ) + $refX1;
+	$xS[32]  = (-2.85 * 1 ) + $refX1;
+	$xS[33]  = (-2.85 * 1 ) + $refX1;
+	$xS[34]  = (-2.80 * 1 ) + $refX1;
+	$xS[35]  = (-2.74 * 1 ) + $refX1;
+	$xS[36]  = (-2.63 * 1 ) + $refX1;
+	$xS[37]  = (-2.51 * 1 ) + $refX1;
+	$xS[38]  = (-2.29 * 1 ) + $refX1;
+	$xS[39]  = (-2.17 * 1 ) + $refX1;
+	$xS[40]  = (-2.06 * 1 ) + $refX1;
+	$xS[41]  = (-2.00 * 1 ) + $refX1;
+	$xS[42]  = (-1.31 * 1 ) + $refX1;
+	$xS[43]  = (-1.43 * 1 ) + $refX1;
+	$xS[44]  = (-1.54 * 1 ) + $refX1;
+	$xS[45]  = (-1.60 * 1 ) + $refX1;
+	$xS[46]  = (-1.65 * 1 ) + $refX1;
+	$xS[47]  = (-1.65 * 1 ) + $refX1;
+	$xS[48]  = (-1.60 * 1 ) + $refX1;
+	$xS[49]  = (-1.54 * 1 ) + $refX1;
+	$xS[50]  = (-1.43 * 1 ) + $refX1;
+	$xS[51]  = (-1.31 * 1 ) + $refX1;
+	$xS[52]  = (-1.09 * 1 ) + $refX1;
+	$xS[53]  = (-0.97 * 1 ) + $refX1;
+	$xS[54]  = (-0.86 * 1 ) + $refX1;
+	$xS[55]  = (-0.80 * 1 ) + $refX1;
+	$xS[56]  = (-0.75 * 1 ) + $refX1;
+	$xS[57]  = (-0.75 * 1 ) + $refX1;
+	$xS[58]  = (-0.80 * 1 ) + $refX1;
+	$xS[59]  = (-0.86 * 1 ) + $refX1;
+	$xS[60]  = (-0.97 * 1 ) + $refX1;
+	$xS[61]  = (-1.09 * 1 ) + $refX1;
+	$xS[62]  = (-1.31 * 1 ) + $refX1;
+	$xS[63]  = (-0.45 * 1 ) + $refX1;
+	$xS[64]  = (-0.45 * 1 ) + $refX1;
+	$xS[65]  = (-0.45 * 1 ) + $refX1;
+	$xS[66]  = ( 0.00 * 1 ) + $refX1;
+	$xS[67]  = ( 0.45 * 1 ) + $refX1;
+	$xS[68]  = ( 0.00 * 1 ) + $refX1;
+	$xS[69]  = ( 0.45 * 1 ) + $refX1;
+	$xS[70]  = ( 0.45 * 1 ) + $refX1;
+	$xS[71]  = ( 0.75 * 1 ) + $refX1;
+	$xS[72]  = ( 0.75 * 1 ) + $refX1;
+	$xS[73]  = ( 0.75 * 1 ) + $refX1;
+	$xS[74]  = ( 1.20 * 1 ) + $refX1;
+	$xS[75]  = ( 1.65 * 1 ) + $refX1;
+	$xS[76]  = ( 1.20 * 1 ) + $refX1;
+	$xS[77]  = ( 1.65 * 1 ) + $refX1;
+	$xS[78]  = ( 1.65 * 1 ) + $refX1;
+	$xS[79]  = ( 2.74 * 1 ) + $refX1;
+	$xS[80]  = ( 2.63 * 1 ) + $refX1;
+	$xS[81]  = ( 2.46 * 1 ) + $refX1;
+	$xS[82]  = ( 2.23 * 1 ) + $refX1;
+	$xS[83]  = ( 2.06 * 1 ) + $refX1;
+	$xS[84]  = ( 1.95 * 1 ) + $refX1;
+	$xS[85]  = ( 1.95 * 1 ) + $refX1;
+	$xS[86]  = ( 2.00 * 1 ) + $refX1;
+	$xS[87]  = ( 2.06 * 1 ) + $refX1;
+	$xS[88]  = ( 2.17 * 1 ) + $refX1;
+	$xS[89]  = ( 2.51 * 1 ) + $refX1;
+	$xS[90]  = ( 2.63 * 1 ) + $refX1;
+	$xS[91]  = ( 2.68 * 1 ) + $refX1;
+	$xS[92]  = ( 2.74 * 1 ) + $refX1;
+	$xS[93]  = ( 2.74 * 1 ) + $refX1;
+	$xS[94]  = ( 2.63 * 1 ) + $refX1;
+	$xS[95]  = ( 2.46 * 1 ) + $refX1;
+	$xS[96]  = ( 2.23 * 1 ) + $refX1;
+	$xS[97]  = ( 2.06 * 1 ) + $refX1;
+	$xS[98]  = ( 1.95 * 1 ) + $refX1;
+	
+	$yS[0]   = (-2.50 * 1 ) + $refY1;
+	$yS[1]   = (-2.50 * 1 ) + $refY1;
+	$yS[2]   = ( 2.50 * 1 ) + $refY1;
+	$yS[3]   = ( 2.50 * 1 ) + $refY1;
+	$yS[4]   = (-2.50 * 1 ) + $refY1;
+	$yS[5]   = (-2.50 * 1 ) + $refY1;
+	$yS[6]   = (-2.50 * 1 ) + $refY1;
+	$yS[7]   = ( 2.50 * 1 ) + $refY1;
+	$yS[8]   = ( 2.50 * 1 ) + $refY1;
+	$yS[9]   = (-2.50 * 1 ) + $refY1;
+	$yS[10]  = ( 5.00 * 1 ) + $refY1;
+	$yS[11]  = ( 0.00 * 1 ) + $refY1;
+	$yS[12]  = (-2.50 * 1 ) + $refY1;
+	$yS[13]  = (-4.50 * 1 ) + $refY1;
+	$yS[14]  = (-5.50 * 1 ) + $refY1;
+	$yS[15]  = (-6.00 * 1 ) + $refY1;
+	$yS[16]  = (-6.21 * 1 ) + $refY1;
+	$yS[17]  = (-6.00 * 1 ) + $refY1;
+	$yS[18]  = (-5.50 * 1 ) + $refY1;
+	$yS[19]  = (-4.50 * 1 ) + $refY1;
+	$yS[20]  = (-2.50 * 1 ) + $refY1;
+	$yS[21]  = (-4.00 * 1 ) + $refY1;
+	$yS[22]  = (-4.00 * 1 ) + $refY1;
+	$yS[23]  = (-2.50 * 1 ) + $refY1;
+	$yS[24]  = ( 6.34 * 1 ) + $refY1;
+	$yS[25]  = ( 6.46 * 1 ) + $refY1;
+	$yS[26]  = ( 6.57 * 1 ) + $refY1;
+	$yS[27]  = ( 6.63 * 1 ) + $refY1;
+	$yS[28]  = ( 6.63 * 1 ) + $refY1;
+	$yS[29]  = ( 6.57 * 1 ) + $refY1;
+	$yS[30]  = ( 6.46 * 1 ) + $refY1;
+	$yS[31]  = ( 6.34 * 1 ) + $refY1;
+	$yS[32]  = ( 6.17 * 1 ) + $refY1;
+	$yS[33]  = ( 5.89 * 1 ) + $refY1;
+	$yS[34]  = ( 5.72 * 1 ) + $refY1;
+	$yS[35]  = ( 5.61 * 1 ) + $refY1;
+	$yS[36]  = ( 5.49 * 1 ) + $refY1;
+	$yS[37]  = ( 5.43 * 1 ) + $refY1;
+	$yS[38]  = ( 5.43 * 1 ) + $refY1;
+	$yS[39]  = ( 5.49 * 1 ) + $refY1;
+	$yS[40]  = ( 5.61 * 1 ) + $refY1;
+	$yS[41]  = ( 5.72 * 1 ) + $refY1;
+	$yS[42]  = ( 6.63 * 1 ) + $refY1;
+	$yS[43]  = ( 6.57 * 1 ) + $refY1;
+	$yS[44]  = ( 6.46 * 1 ) + $refY1;
+	$yS[45]  = ( 6.34 * 1 ) + $refY1;
+	$yS[46]  = ( 6.17 * 1 ) + $refY1;
+	$yS[47]  = ( 5.89 * 1 ) + $refY1;
+	$yS[48]  = ( 5.72 * 1 ) + $refY1;
+	$yS[49]  = ( 5.61 * 1 ) + $refY1;
+	$yS[50]  = ( 5.49 * 1 ) + $refY1;
+	$yS[51]  = ( 5.43 * 1 ) + $refY1;
+	$yS[52]  = ( 5.43 * 1 ) + $refY1;
+	$yS[53]  = ( 5.49 * 1 ) + $refY1;
+	$yS[54]  = ( 5.61 * 1 ) + $refY1;
+	$yS[55]  = ( 5.72 * 1 ) + $refY1;
+	$yS[56]  = ( 5.89 * 1 ) + $refY1;
+	$yS[57]  = ( 6.17 * 1 ) + $refY1;
+	$yS[58]  = ( 6.34 * 1 ) + $refY1;
+	$yS[59]  = ( 6.46 * 1 ) + $refY1;
+	$yS[60]  = ( 6.57 * 1 ) + $refY1;
+	$yS[61]  = ( 6.63 * 1 ) + $refY1;
+	$yS[62]  = ( 6.63 * 1 ) + $refY1;
+	$yS[63]  = ( 6.63 * 1 ) + $refY1;
+	$yS[64]  = ( 5.43 * 1 ) + $refY1;
+	$yS[65]  = ( 6.63 * 1 ) + $refY1;
+	$yS[66]  = ( 5.43 * 1 ) + $refY1;
+	$yS[67]  = ( 6.63 * 1 ) + $refY1;
+	$yS[68]  = ( 5.43 * 1 ) + $refY1;
+	$yS[69]  = ( 6.63 * 1 ) + $refY1;
+	$yS[70]  = ( 5.43 * 1 ) + $refY1;
+	$yS[71]  = ( 6.63 * 1 ) + $refY1;
+	$yS[72]  = ( 5.43 * 1 ) + $refY1;
+	$yS[73]  = ( 6.63 * 1 ) + $refY1;
+	$yS[74]  = ( 5.43 * 1 ) + $refY1;
+	$yS[75]  = ( 6.63 * 1 ) + $refY1;
+	$yS[76]  = ( 5.43 * 1 ) + $refY1;
+	$yS[77]  = ( 6.63 * 1 ) + $refY1;
+	$yS[78]  = ( 5.43 * 1 ) + $refY1;
+	$yS[79]  = ( 6.46 * 1 ) + $refY1;
+	$yS[80]  = ( 6.57 * 1 ) + $refY1;
+	$yS[81]  = ( 6.63 * 1 ) + $refY1;
+	$yS[82]  = ( 6.63 * 1 ) + $refY1;
+	$yS[83]  = ( 6.57 * 1 ) + $refY1;
+	$yS[84]  = ( 6.46 * 1 ) + $refY1;
+	$yS[85]  = ( 6.34 * 1 ) + $refY1;
+	$yS[86]  = ( 6.23 * 1 ) + $refY1;
+	$yS[87]  = ( 6.17 * 1 ) + $refY1;
+	$yS[88]  = ( 6.12 * 1 ) + $refY1;
+	$yS[89]  = ( 6.00 * 1 ) + $refY1;
+	$yS[90]  = ( 5.95 * 1 ) + $refY1;
+	$yS[91]  = ( 5.89 * 1 ) + $refY1;
+	$yS[92]  = ( 5.77 * 1 ) + $refY1;
+	$yS[93]  = ( 5.61 * 1 ) + $refY1;
+	$yS[94]  = ( 5.49 * 1 ) + $refY1;
+	$yS[95]  = ( 5.43 * 1 ) + $refY1;
+	$yS[96]  = ( 5.43 * 1 ) + $refY1;
+	$yS[97]  = ( 5.49 * 1 ) + $refY1;
+	$yS[98]  = ( 5.61 * 1 ) + $refY1;
+
+	$pen[0]   = (0);
+	$pen[1]   = (1);
+	$pen[2]   = (1);
+	$pen[3]   = (1);
+	$pen[4]   = (1);
+	$pen[5]   = (0);
+	$pen[6]   = (1);
+	$pen[7]   = (1);
+	$pen[8]   = (1);
+	$pen[9]   = (1);
+	$pen[10]  = (0);
+	$pen[11]  = (1);
+	$pen[12]  = (1);
+	$pen[13]  = (1);
+	$pen[14]  = (1);
+	$pen[15]  = (1);
+	$pen[16]  = (1);
+	$pen[17]  = (1);
+	$pen[18]  = (1);
+	$pen[19]  = (1);
+	$pen[20]  = (1);
+	$pen[21]  = (1);
+	$pen[22]  = (1);
+	$pen[23]  = (1);
+	$pen[24]  = (0);
+	$pen[25]  = (1);
+	$pen[26]  = (1);
+	$pen[27]  = (1);
+	$pen[28]  = (1);
+	$pen[29]  = (1);
+	$pen[30]  = (1);
+	$pen[31]  = (1);
+	$pen[32]  = (1);
+	$pen[33]  = (1);
+	$pen[34]  = (1);
+	$pen[35]  = (1);
+	$pen[36]  = (1);
+	$pen[37]  = (1);
+	$pen[38]  = (1);
+	$pen[39]  = (1);
+	$pen[40]  = (1);
+	$pen[41]  = (1);
+	$pen[42]  = (0);
+	$pen[43]  = (1);
+	$pen[44]  = (1);
+	$pen[45]  = (1);
+	$pen[46]  = (1);
+	$pen[47]  = (1);
+	$pen[48]  = (1);
+	$pen[49]  = (1);
+	$pen[50]  = (1);
+	$pen[51]  = (1);
+	$pen[52]  = (1);
+	$pen[53]  = (1);
+	$pen[54]  = (1);
+	$pen[55]  = (1);
+	$pen[56]  = (1);
+	$pen[57]  = (1);
+	$pen[58]  = (1);
+	$pen[59]  = (1);
+	$pen[60]  = (1);
+	$pen[61]  = (1);
+	$pen[62]  = (1);
+	$pen[63]  = (0);
+	$pen[64]  = (1);
+	$pen[65]  = (0);
+	$pen[66]  = (1);
+	$pen[67]  = (0);
+	$pen[68]  = (1);
+	$pen[69]  = (0);
+	$pen[70]  = (1);
+	$pen[71]  = (0);
+	$pen[72]  = (1);
+	$pen[73]  = (0);
+	$pen[74]  = (1);
+	$pen[75]  = (0);
+	$pen[76]  = (1);
+	$pen[77]  = (0);
+	$pen[78]  = (1);
+	$pen[79]  = (0);
+	$pen[80]  = (1);
+	$pen[81]  = (1);
+	$pen[82]  = (1);
+	$pen[83]  = (1);
+	$pen[84]  = (1);
+	$pen[85]  = (1);
+	$pen[86]  = (1);
+	$pen[87]  = (1);
+	$pen[88]  = (1);
+	$pen[89]  = (1);
+	$pen[90]  = (1);
+	$pen[91]  = (1);
+	$pen[92]  = (1);
+	$pen[93]  = (1);
+	$pen[94]  = (1);
+	$pen[95]  = (1);
+	$pen[96]  = (1);
+	$pen[97]  = (1);
+	$pen[98]  = (1);
+	
+	return ( \@xS, \@yS, \@pen );
+}
+sub triangle
+{
+
+	my ( $refX2, $refY2 ) = @_;
+	&clearArrays;
+	$xS[0] = (0 * $scale)  + $refX2;
+	$xS[1] = (0.866	 * $scale)  + $refX2;
+	$xS[2] = (-0.866 * $scale) + $refX2;
+	$yS[0] = (1 * $scale)  + $refY2;
+	$yS[1] = (-0.5 * $scale)  + $refY2;
+	$yS[2] = (-0.5 * $scale) + $refY2;
+	return ( \@xS, \@yS );
+}
+
+sub square
+{
+
+	my ( $refX3, $refY3 ) = @_;
+	&clearArrays;
+	$xS[0] = ( -0.707  * $scale) + $refX3;
+	$xS[1] = ( -0.707 * $scale)  + $refX3;
+	$xS[2] = (  0.707 * $scale)  + $refX3;
+	$xS[3] = (  0.707  * $scale) + $refX3;
+	$yS[0] = (  0.707 * $scale)  + $refY3;
+	$yS[1] = (  -0.707* $scale)  + $refY3;
+	$yS[2] = (  -0.707 * $scale) + $refY3;
+	$yS[3] = (  0.707  * $scale) + $refY3;
+	return ( \@xS, \@yS );
+}
+
+sub circle
+{
+	my ( $refX4, $refY4 ) = @_;
+	&clearArrays;
+	
+	# no pen as is all drawn
+	$xS[0] = (   0.0000 * $scale )  + $refX4;
+	$xS[1] = (   0.1740 * $scale )  + $refX4;
+	$xS[2] = (   0.3420 * $scale )  + $refX4;
+	$xS[3] = (   0.5000 * $scale )  + $refX4;
+	$xS[4] = (   0.6430 * $scale )  + $refX4;
+	$xS[5]  = (  0.7660 * $scale )  + $refX4;
+	$xS[6]  = (  0.8660 * $scale )  + $refX4;
+	$xS[7]  = (  0.9400 * $scale )  + $refX4;
+	$xS[8]  = (  0.9850 * $scale )  + $refX4;
+	$xS[9]  = (  1.0000 * $scale )  + $refX4;
+	$xS[10] = (  0.9850 * $scale )  + $refX4;
+	$xS[11] = (  0.9400 * $scale )  + $refX4;
+	$xS[12] = (  0.8660 * $scale )  + $refX4;
+	$xS[13] = (  0.7660 * $scale )  + $refX4;
+	$xS[14] = (  0.6430 * $scale )  + $refX4;
+	$xS[15] = (  0.5000 * $scale )  + $refX4;
+	$xS[16] = (  0.3420 * $scale )  + $refX4;
+	$xS[17] = (  0.1740 * $scale )  + $refX4;
+	$xS[18] = (  0.0000 * $scale )  + $refX4;
+	$xS[19] = (  -0.1730* $scale )  + $refX4;
+	$xS[20] = (  -0.3420* $scale )  + $refX4;
+	$xS[21] = (  -0.5000* $scale )  + $refX4;
+	$xS[22] = (  -0.6420* $scale )  + $refX4;
+	$xS[23] = (  -0.7660* $scale )  + $refX4;
+	$xS[24] = (  -0.8660* $scale )  + $refX4;
+	$xS[25] = (  -0.9390* $scale )  + $refX4;
+	$xS[26] = (  -0.9840* $scale )  + $refX4;
+	$xS[27] = (  -1.0000* $scale )  + $refX4;
+	$xS[28] = (  -0.9840* $scale )  + $refX4;
+	$xS[29] = (  -0.9390* $scale )  + $refX4;
+	$xS[30] = (  -0.8660* $scale )  + $refX4;
+	$xS[31] = (  -0.7660* $scale )  + $refX4;
+	$xS[32] = (  -0.6420* $scale )  + $refX4;
+	$xS[33] = (  -0.5000* $scale )  + $refX4;
+	$xS[34] = (  -0.3420* $scale )  + $refX4;
+	$xS[35] = (  -0.1730* $scale )  + $refX4;
+	$yS[0]  = (  1.0000  * $scale ) + $refY4;
+	$yS[1]  = (  0.9850  * $scale ) + $refY4;
+	$yS[2]  = (  0.9400  * $scale ) + $refY4;
+	$yS[3]  = (  0.8660  * $scale ) + $refY4;
+	$yS[4]  = (  0.7670  * $scale ) + $refY4;
+	$yS[5]  = (  0.6430  * $scale ) + $refY4;
+	$yS[6]  = (  0.5000  * $scale ) + $refY4;
+	$yS[7]  = (  0.3420  * $scale ) + $refY4;
+	$yS[8]  = (  0.1740  * $scale ) + $refY4;
+	$yS[9]  = (  0.0000  * $scale ) + $refY4;
+	$yS[10] = (  -0.1730 * $scale ) + $refY4;
+	$yS[11] = (  -0.3420 * $scale ) + $refY4;
+	$yS[12] = (  -0.5000 * $scale ) + $refY4;
+	$yS[13] = (  -0.6420 * $scale ) + $refY4;
+	$yS[14] = (  -0.7660 * $scale ) + $refY4;
+	$yS[15] = (  -0.8660 * $scale ) + $refY4;
+	$yS[16] = (  -0.9390 * $scale ) + $refY4;
+	$yS[17] = (  -0.9840 * $scale ) + $refY4;
+	$yS[18] = (  -1.0000 * $scale ) + $refY4;
+	$yS[19] = (  -0.9840 * $scale ) + $refY4;
+	$yS[20] =  (  -0.9390 * $scale )  + $refY4;
+	$yS[21] =  (  -0.8660 * $scale )  + $refY4;
+	$yS[22] =  (  -0.7660 * $scale )  + $refY4;
+	$yS[23] =  (  -0.6420 * $scale )  + $refY4;
+	$yS[24] =  (  -0.5000 * $scale )  + $refY4;
+	$yS[25] =  (  -0.3420 * $scale )  + $refY4;
+	$yS[26] =  (  -0.1730 * $scale )  + $refY4;
+	$yS[27] =  (  0.0000  * $scale )       + $refY4;
+	$yS[28] =  (  0.1740  * $scale )  + $refY4;
+	$yS[29] =  (  0.3420  * $scale )  + $refY4;
+	$yS[30] =  (  0.5000  * $scale )  + $refY4;
+	$yS[31] =  (  0.6430  * $scale )  + $refY4;
+	$yS[32] = (   0.7670  * $scale ) + $refY4;
+	$yS[33] = (   0.8660  * $scale ) + $refY4;
+	$yS[34] = (   0.9400  * $scale ) + $refY4;
+	$yS[35] = (   0.9850  * $scale ) + $refY4;
+	return ( \@xS, \@yS );
+}
+
+sub star
+{
+	my ( $refX2, $refY2 ) = @_;
+	&clearArrays;
+	$xS[0] = (0     	* $scale)  	+ $refX2;
+	$xS[1] = (0.225  	* $scale)  	+ $refX2;
+	$xS[2] = (0.951  	* $scale) 	+ $refX2;
+	$xS[3] = (0.363 	* $scale)  	+ $refX2;
+	$xS[4] = (0.588  	* $scale)  	+ $refX2;
+	$xS[5] = (0      	* $scale) 	+ $refX2;
+	$xS[6] = (-0.588	* $scale)  	+ $refX2;
+	$xS[7] = (-0.363 	* $scale)  	+ $refX2;
+	$xS[8] = (-0.951 	* $scale) 	+ $refX2;
+	$xS[9] = (-0.225	* $scale)  	+ $refX2;
+	$yS[0] = (1     	* $scale)  	+ $refY2;
+	$yS[1] = (0.309 	* $scale)  	+ $refY2;
+	$yS[2] = (0.309 	* $scale) 	+ $refY2;
+	$yS[3] = (-0.118	* $scale)  	+ $refY2;
+	$yS[4] = (-0.809 	* $scale)  	+ $refY2;
+	$yS[5] = (-0.382 	* $scale) 	+ $refY2;
+	$yS[6] = (-0.809	* $scale)  	+ $refY2;
+	$yS[7] = (-0.118 	* $scale)  	+ $refY2;
+	$yS[8] = (0.309  	* $scale) 	+ $refY2;
+	$yS[9] = (0.309 	* $scale)  	+ $refY2;
+	return ( \@xS, \@yS );
+}
+
+#############################################
+# CLEAR ARRAYS IN THIS SCRIPT
+#############################################
+sub clearArrays
+{
+	my @clean;
+	@xS = @clean;
+	@yS = @clean;
+	@zS = @clean;
+}
+############################################
+# Default Subroutines
+############################################
+sub loadDefaults
+{
+
+	# Load defaults into a hash
+	dbmopen %userSettings, "symboliseblastholeDefaults", 0666;
+
+	#Set the values to the default values
+	$doMark = $userSettings{'doMark'} || 0;
+	$doColour = $userSettings{'doColour'} || 1;
+	$marker = $userSettings{'marker'} || 1;
+	$colour = $userSettings{'colour'} || "";
+	$scale  = $userSettings{'scale'}  || 1;
+	dbmclose %userSettings;
+}
+
+sub saveDefaults
+{
+
+	# Save defaults into a hash
+	dbmopen %userSettings, "symboliseblastholeDefaults", 0666;
+
+	# Save the default values to the below
+	$userSettings{'doMark'} = $doMark;
+	$userSettings{'doColour'} = $doColour;
+	$userSettings{'marker'} = $marker;
+	$userSettings{'colour'} = $colour;
+	$userSettings{'scale'} = $scale;
+	dbmclose %userSettings;
+}
