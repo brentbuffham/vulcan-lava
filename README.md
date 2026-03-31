@@ -225,3 +225,4 @@ perl scripts/lava/block_models/grade_tonnage_report.lava
 
 This project is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
+Store of years of vulcan lavas and the perl modules related to maptek vulcan lava creation
