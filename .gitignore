@@ -1,0 +1,49 @@
+# Perl build artifacts
+blib/
+_build/
+Build
+Build.bat
+Makefile
+MANIFEST
+MANIFEST.bak
+META.json
+META.yml
+MYMETA.json
+MYMETA.yml
+pm_to_blib
+*.o
+*.a
+*.so
+
+# CPAN module installation
+local/
+cpanfile.snapshot
+
+# Test coverage
+cover_db/
+*.gcov
+*.gcda
+*.gcno
+
+# Editor and IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Vulcan output / temp files
+*.dmf
+*.tri.bak
+*.isis.bak
+*.bm.bak
+*.dh.bak
+*.tmp
+
+# Log files
+*.log
+
+# Distribution archives
+*.tar.gz
+*.zip

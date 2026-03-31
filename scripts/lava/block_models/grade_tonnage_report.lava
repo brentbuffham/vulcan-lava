@@ -1,0 +1,120 @@
+#!/usr/bin/perl
+#
+# grade_tonnage_report.lava
+#
+# PURPOSE
+#   Generate a grade-tonnage table for a Vulcan block model.
+#   Reports above a range of cut-off grades for a user-specified
+#   grade field, assuming a fixed or field-based density.
+#
+# INPUTS
+#   - Block model file  (.bmf)
+#   - Grade field name  (e.g. AU_PPM)
+#   - Density field     (e.g. DENSITY, or a fixed numeric value)
+#   - Block volume      (m3, calculated from xinc * yinc * zinc)
+#   - Cut-off range     (start, end, step)
+#
+# OUTPUTS
+#   - Tab-delimited grade-tonnage table printed to STDOUT
+#
+# USAGE
+#   Run from Vulcan: Utilities -> Run Lava Script -> grade_tonnage_report.lava
+#   Or from CLI:     perl grade_tonnage_report.lava
+#
+# AUTHOR
+#   Brent Buffham
+#
+# ----------------------------------------------------------------------------
+
+use strict;
+use warnings;
+use lib '../../..';    # repo root -> lib/ on PERL5LIB
+use Vulcan::BlockModel;
+
+# ---------------------------------------------------------------------------
+# User-configurable parameters
+# ---------------------------------------------------------------------------
+
+my $PROJECT_DIR    = $ENV{VULCAN_PROJECT} // '.';
+my $BM_FILE        = $ENV{BM_FILE}        // 'resource_model.bmf';
+my $GRADE_FIELD    = $ENV{GRADE_FIELD}    // 'AU_PPM';
+my $DENSITY_FIELD  = $ENV{DENSITY_FIELD}  // undef;   # undef => use fixed density
+my $FIXED_DENSITY  = $ENV{FIXED_DENSITY}  // 2.7;     # t/m3
+my $BLOCK_VOLUME   = $ENV{BLOCK_VOLUME}   // 125;     # 5x5x5 m3
+my $CUTOFF_START   = $ENV{CUTOFF_START}   // 0.0;
+my $CUTOFF_END     = $ENV{CUTOFF_END}     // 3.0;
+my $CUTOFF_STEP    = $ENV{CUTOFF_STEP}    // 0.1;
+
+# ---------------------------------------------------------------------------
+# Open block model
+# ---------------------------------------------------------------------------
+
+my $bm = Vulcan::BlockModel->new(
+    project_dir => $PROJECT_DIR,
+    verbose     => 1,
+);
+
+$bm->open_project()
+    or die "Cannot open project '$PROJECT_DIR': " . $bm->error . "\n";
+
+$bm->open_block_model($BM_FILE)
+    or die "Cannot open block model '$BM_FILE': " . $bm->error . "\n";
+
+printf "Block model : %s\n",   $bm->block_model_file();
+printf "Grade field : %s\n",   $GRADE_FIELD;
+printf "Density     : %s\n",   $DENSITY_FIELD // "fixed $FIXED_DENSITY t/m3";
+printf "Block volume: %.2f m3\n\n", $BLOCK_VOLUME;
+
+# ---------------------------------------------------------------------------
+# Accumulate data
+# ---------------------------------------------------------------------------
+
+my @cutoffs;
+{
+    my $c = $CUTOFF_START;
+    while ( $c <= $CUTOFF_END + 1e-9 ) {
+        push @cutoffs, sprintf('%.4f', $c) + 0;
+        $c += $CUTOFF_STEP;
+    }
+}
+
+my ( %tonnes_above, %grade_above );
+$tonnes_above{$_} = 0 for @cutoffs;
+$grade_above{$_}  = 0 for @cutoffs;
+
+my $total_blocks = 0;
+
+while ( my $block = $bm->next_block() ) {
+    my $grade = $block->{$GRADE_FIELD} // next;    # skip blocks without grade
+
+    my $density = defined $DENSITY_FIELD
+        ? ( $block->{$DENSITY_FIELD} // $FIXED_DENSITY )
+        : $FIXED_DENSITY;
+
+    my $tonnes = $BLOCK_VOLUME * $density;
+    $total_blocks++;
+
+    for my $cutoff (@cutoffs) {
+        next if $grade < $cutoff;
+        $tonnes_above{$cutoff} += $tonnes;
+        $grade_above{$cutoff}  += $grade * $tonnes;
+    }
+}
+
+printf "Total blocks processed: %d\n\n", $total_blocks;
+
+# ---------------------------------------------------------------------------
+# Print grade-tonnage table
+# ---------------------------------------------------------------------------
+
+printf "%-10s  %15s  %12s\n", 'Cut-off', 'Tonnes (t)', 'Grade';
+printf "%s\n", '-' x 42;
+
+for my $cutoff (@cutoffs) {
+    my $t = $tonnes_above{$cutoff};
+    my $g = $t > 0 ? $grade_above{$cutoff} / $t : 0;
+    printf "%-10.4f  %15.0f  %12.4f\n", $cutoff, $t, $g;
+}
+
+$bm->close_block_model();
+$bm->close_project();

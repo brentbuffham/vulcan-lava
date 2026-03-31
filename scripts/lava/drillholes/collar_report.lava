@@ -1,0 +1,85 @@
+#!/usr/bin/perl
+#
+# collar_report.lava
+#
+# PURPOSE
+#   Print a collar listing for all drillholes in a Vulcan drillhole database.
+#   Includes hole ID, easting, northing, RL, azimuth, dip, and total depth.
+#
+# INPUTS
+#   - Drillhole database (.dh.isis)
+#
+# OUTPUTS
+#   - Collar summary table printed to STDOUT
+#
+# USAGE
+#   Run from Vulcan: Utilities -> Run Lava Script -> collar_report.lava
+#   Or from CLI:     perl collar_report.lava
+#
+# AUTHOR
+#   Brent Buffham
+#
+# ----------------------------------------------------------------------------
+
+use strict;
+use warnings;
+use lib '../../..';
+use Vulcan::Drillhole;
+
+# ---------------------------------------------------------------------------
+# Parameters
+# ---------------------------------------------------------------------------
+
+my $PROJECT_DIR = $ENV{VULCAN_PROJECT} // '.';
+my $DH_FILE     = $ENV{DH_FILE}        // 'drillholes.dh.isis';
+
+# ---------------------------------------------------------------------------
+# Open database
+# ---------------------------------------------------------------------------
+
+my $dh = Vulcan::Drillhole->new(
+    project_dir => $PROJECT_DIR,
+    verbose     => 1,
+);
+
+$dh->open_project()
+    or die "Cannot open project: " . $dh->error . "\n";
+
+$dh->open_database($DH_FILE)
+    or die "Cannot open drillhole database '$DH_FILE': " . $dh->error . "\n";
+
+printf "Database : %s\n", $dh->database_file();
+printf "Holes    : %d\n\n", $dh->hole_count();
+
+# ---------------------------------------------------------------------------
+# Print collar table
+# ---------------------------------------------------------------------------
+
+printf "%-12s  %12s  %12s  %8s  %8s  %6s  %8s\n",
+    'Hole ID', 'Easting', 'Northing', 'RL', 'Azimuth', 'Dip', 'Depth';
+printf "%s\n", '-' x 74;
+
+my $total_depth = 0;
+
+for my $id ( $dh->hole_ids() ) {
+    my $c = $dh->get_collar($id);
+    next unless $c;
+
+    $total_depth += $c->{depth} // 0;
+
+    printf "%-12s  %12.2f  %12.2f  %8.2f  %8.1f  %6.1f  %8.1f\n",
+        $id,
+        $c->{easting}  // 0,
+        $c->{northing} // 0,
+        $c->{rl}       // 0,
+        $c->{azimuth}  // 0,
+        $c->{dip}      // 0,
+        $c->{depth}    // 0;
+}
+
+printf "%s\n", '-' x 74;
+printf "%-12s  %12s  %12s  %8s  %8s  %6s  %8.1f\n",
+    'TOTAL', '', '', '', '', '', $total_depth;
+
+$dh->close_database();
+$dh->close_project();
